@@ -49,9 +49,9 @@ def get_AQ_value(message,key):
 
 def consume(message):
     event = message.get("event_type")
-    print (event)
+ #   print (event)
     if event == "compute.instance.create.end":
-        print (message)
+#        print (message)
         if is_aq_message(message):
             print("=== Received Aquilon VM create message ===")
             logger.info("=== Received Aquilon VM create message ===")
@@ -66,7 +66,10 @@ def consume(message):
             hostnames = []
             for ip in message.get("payload").get("fixed_ips"):
                 try:
-                    hostnames.append(socket.gethostbyaddr(ip.get("address"))[0])
+                    hostname = socket.gethostbyaddr(ip.get("address"))[0]
+                    hostnames.append(hostname)
+            #        aq_api.check_host_exists(hostname)
+                    
                 except Exception as e:
                     logger.error("Problem converting ip to hostname" + str(e))
                     raise Exception("Problem converting ip to hostname")
@@ -94,8 +97,41 @@ def consume(message):
             osversion =  get_AQ_value(message,"AQ_OSVERSION")
             archetype =  get_AQ_value(message,"AQ_ARCHETYPE")
             osname =  get_AQ_value(message,"AQ_OSNAME")
- 
+            
+            vcpus = message.get("payload").get("vcpus")
+            root_gb = message.get("payload").get("root_gb")
+            memory_mb = message.get("payload").get("memory_mb")
+            uuid = message.get("payload").get("instance_id")
+            vmhost = message.get("payload").get("host")
+            firstip = message.get("payload").get("fixed_ips")[0].get("address")
 
+            print("########################   create new machine #######################")
+            try:
+                machinename = aq_api.machine_create(uuid,vmhost,vcpus,memory_mb,hostname)
+            except Exception as e:
+                raise Exception("Failed to create machine")
+            openstack_api.update_metadata(project_id, vm_id, {"AQ_MACHINENAME" : machinename})
+
+            for index,ip in enumerate(message.get("payload").get("fixed_ips")):
+                interfacename = "eth"+ str(index)
+                try:
+                    aq_api.add_machine_interface(machinename,ip.get("address"),ip.get("vif_mac"),ip.get("label"),interfacename, socket.gethostbyaddr(ip.get("address"))[0])
+                except Exception as e:
+                    raise Exception("Failed to add machine interface")
+            try:
+                aq_api.update_machine_interface(machinename,"eth0")
+            except Exception as e:
+                raise Exception("Failed to set default interface")
+            try:
+                aq_api.host_create(hostnames[0],machinename,firstip,archetype,domain,personality,osname,osversion)
+            except Exception as e:
+                raise Exception("Failed to create host")
+            for index,ip in enumerate(message.get("payload").get("fixed_ips")):
+                interfacename = "eth"+ str(index)
+                try:
+                    aq_api.add_machine_interface_address(machinename,ip.get("address"),ip.get("vif_mac"),ip.get("label"),interfacename, socket.gethostbyaddr(ip.get("address"))[0])
+                except Exception as e:
+                    raise Exception("Failed to add machine interface address")
 
             print("Domain: %s" % domain)
             print("Sandbox: %s" % sandbox)
@@ -111,15 +147,26 @@ def consume(message):
             logger.info("Archetype: %s" % archetype)
             logger.info("OS Name: %s" % osname)
 
-            try:
-                # as the machine may have been assigned more that one ip address,
-                # apply the aquilon configuration to all of them
-                for host in hostnames:
-                    aq_api.vm_create(host, domain, sandbox, personality, osversion, archetype, osname)
-            except Exception as e:
-                logger.error("Failed to set Aquilon configuration: " + str(e))
-                openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "FAILED"})
-                raise Exception("Failed to set Aquilon configuration")
+            # as the machine may have been assigned more that one ip address,
+            # apply the aquilon configuration to all of them
+            for host in hostnames:
+                    
+                try:
+                    if domain:
+                        aq_manage(hostname, "domain", domain)
+                    else:
+                        aq_manage(hostname, "sandbox", sandbox)
+                except Exception as e:
+                    logger.error("Failed to manage in Aquilon: " + str(e))
+                    openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "FAILED"})
+                    raise Exception("Failed to set Aquilon configuration")
+                try:
+                    aq_make(hostname, personality, osversion, archetype, osname)
+                except Exception as e:
+                    logger.error("Failed to make in Aquilon: " + str(e))
+                    openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "FAILED"})
+                    raise Exception("Failed to set Aquilon configuration")
+
 
             logger.info("Successfully applied Aquilon configuration")
             openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "SUCCESS"})
@@ -138,15 +185,28 @@ def consume(message):
             vm_name = message.get("payload").get("display_name")
             username = message.get("_context_user_name")
             metadata = message.get("payload").get("metadata")
+            machinename = message.get("payload").get("metadata").get("AQ_MACHINENAME")
 
             logger.info("Project Name: %s (%s)" % (project_name, project_id))
             logger.info("VM Name: %s (%s) " % (vm_name, vm_id))
             logger.info("Username: " + username)
             logger.info("Hostnames: %s" % metadata.get('HOSTNAMES'))
+            for host in metadata.get("HOSTNAMES").split(","):
+                try:
+                    aq_api.host_delete(host)
+                except Exception as e:
+                    logger.error("Failed to delete host: " + str(e))
+                    openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "FAILED"})
+                    raise Exception("Failed to delete host")
+                   
+            try:
+                aq_api.machine_delete(machinename)
+            except Exception as e:
+                raise Exception("Failed to delete machine")
 
             try:
                 for host in metadata.get('HOSTNAMES').split(','):
-                    aq_api.vm_delete(host)
+                    aq_api.vm_delete(host,machinename)
             except Exception as e:
                 logger.error("Failed to reset Aquilon configuration: " + str(e))
                 openstack_api.update_metadata(project_id, vm_id, {"AQ_STATUS" : "FAILED"})
