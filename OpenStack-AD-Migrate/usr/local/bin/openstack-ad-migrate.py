@@ -15,10 +15,15 @@ import ldap.sasl
 
 PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
+PARSER.add_argument('--config', type=str, help='This is the json file to use')
 ARGS = PARSER.parse_args()
 # Section grabs config
 CONFIGPARSER = SafeConfigParser()
-CONFIGPARSER.read('/etc/openstack-utils/config.ini')
+if ARGS.config:
+    CONFIGPARSER.read(ARGS.config)
+if not ARGS.config:
+    CONFIGPARSER.read('./etc/openstack-utils/config.ini')
+
 USER = CONFIGPARSER.get('ad', 'userdn')
 PWD = CONFIGPARSER.get('ad', 'password')
 HOST = CONFIGPARSER.get('ad', 'host')
