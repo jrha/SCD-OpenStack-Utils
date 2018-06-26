@@ -135,8 +135,8 @@ def putter(groups):
             print i
             projectmemberlist.append(i["Name"])
         # Print current members and project members
-        print "members \n"+members
-        print "projectmembers \n"+projectmemberc
+        print "members \n"+str(members)
+        print "projectmembers \n"+str(projectmemberc)
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
