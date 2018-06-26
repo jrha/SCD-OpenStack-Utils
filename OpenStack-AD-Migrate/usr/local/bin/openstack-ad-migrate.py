@@ -76,19 +76,18 @@ def getter(groups):
     filt = "".join(qurl)
     # Sets attributes
     atrs = ["cn", "displayName", "member", "descripion"]
-    results = ldapvar.search(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+    results = ldapvar.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
     result_set = {}
     # Sets result to an empty dictionary
-    result_type, result_data = ldapvar.result(results, 0)
-    if result_data != []:
-        if result_type == ldap.RES_SEARCH_ENTRY:
-            name = result_data[0][1]['displayName'][0]
+
+    for result_data in results:
+            name = result_data[1]['displayName'][0]
             # Replaces " " with _20 which is ascii space
-            key = result_data[0][1]['displayName'][0].replace(" ", "_20")
+            key = name.replace(" ", "_20")
             print name
             # Sets an empty list
             resultdatalist = {}
-            resultdatalist["members"] = ldap_flatusers(result_data[0][1]['member'], ldapvar)
+            resultdatalist["members"] = ldap_flatusers(result_data[1]['member'], ldapvar)
             resultdatalist["description"] = name
             # Grabs a role and key from groups
             resultdatalist["role"] = groups[key]["role"]
@@ -99,7 +98,7 @@ def getter(groups):
             # If description is in result_data then it
             # Grabs the description from the result_data
             if "description" in result_data:
-                resultdatalist["description"] = result_data[0][1]['description'][0]
+                resultdatalist["description"] = result_data[1]['description'][0]
             # Sets the name of the results to d
             result_set[name] = resultdatalist
     ldapvar.unbind_s()
