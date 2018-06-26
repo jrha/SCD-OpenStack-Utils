@@ -6,14 +6,19 @@ This is a program
 import json
 import sys
 import os
+import argparse
 from subprocess import Popen, PIPE
 from ConfigParser import SafeConfigParser
 import ldap
 import ldap.sasl
 
+
+PARSER = argparse.ArgumentParser(description='Process some stuff.')
+PARSER.add_argument('input', type=str, help='This is the json file to use')
+ARGS = PARSER.parse_args()
 # Section grabs config
 CONFIGPARSER = SafeConfigParser()
-CONFIGPARSER.read('./etc/openstack-utils/config.ini')
+CONFIGPARSER.read('/etc/openstack-utils/config.ini')
 USER = CONFIGPARSER.get('ad', 'userdn')
 PWD = CONFIGPARSER.get('ad', 'password')
 HOST = CONFIGPARSER.get('ad', 'host')
@@ -144,10 +149,10 @@ def main():
     This is the main function that causes the others to be called
     '''
     # Sys exit 1 if not enough args
-    if len(sys.argv) < 2:
+    if not ARGS.input:
         print "Usage: {0} <groups-file>".format(sys.argv[0])
         sys.exit(1)
-    else:
+    if ARGS.input:
         with open(sys.argv[1]) as openfile:
             # Loads json file into commandline from sysargs
             groupdata = json.load(openfile)
