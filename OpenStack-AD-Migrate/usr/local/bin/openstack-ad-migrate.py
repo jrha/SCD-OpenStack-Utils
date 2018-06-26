@@ -1,4 +1,7 @@
 #!/usr/bin/python
+'''
+This is a program
+'''
 import ldap
 import ldap.sasl
 import json
@@ -17,7 +20,7 @@ if True:
     USER = CONFIGPARSER.get('ad', 'userdn')
     PWD = CONFIGPARSER.get('ad', 'password')
     HOST = CONFIGPARSER.get('ad', 'host')
-    basedn = CONFIGPARSER.get('ad', 'basedn')
+    BADESN = CONFIGPARSER.get('ad', 'basedn')
     DOMAIN = CONFIGPARSER.get('openstack', 'domain')
 # Section grabs config - Close
 # Exception
@@ -31,6 +34,9 @@ ENV = os.environ.copy()
 
 # Use command in commandline usage: cl(commandvariable)
 def cl(command):
+    '''
+    This is a command line function
+    '''
     pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
     print command
     return pcommand.communicate()[0]
@@ -38,6 +44,9 @@ def cl(command):
 
 
 def ldap_flatusers(members, ldapvar):
+    '''
+    This section is to add the results to the table
+    '''
     memberstring = []
     for i in members:
         # splits var s by ,
@@ -48,21 +57,21 @@ def ldap_flatusers(members, ldapvar):
         props = ["cn", "displayName", "member"]
         results = ldapvar.search(basedn, ldap.SCOPE_SUBTREE, filt, props)
 
-        while 1:
-            result_type, result_data = ldapvar.result(results, 0)
-            if result_data == []:
-                break
-            else:
-                if result_type == ldap.RES_SEARCH_ENTRY:
-                    if 'member' in result_data[0][1]:
-                        mems = result_data[0][1]['member']
-                        memberstring = memberstring + ldap_flatusers(mems, ldapvar)
-                    else:  # is a user
-                        memberstring.append(result_data[0][1]['cn'][0])
+        result_type, result_data = ldapvar.result(results, 0)
+        if result_data != []:
+            if result_type == ldap.RES_SEARCH_ENTRY:
+                if 'member' in result_data[0][1]:
+                    mems = result_data[0][1]['member']
+                    memberstring = memberstring + ldap_flatusers(mems, ldapvar)
+                else:  # is a user
+                    memberstring.append(result_data[0][1]['cn'][0])
     return memberstring
 
 # Function for getting groups variable
 def getter(groups):
+    '''
+    This is the script that gets the information
+    '''
     # Uses ldap.open to grab hostlist
     ldapvar = ldap.open(HOST)
     ldapvar.protocol_version = ldap.VERSION3
@@ -78,7 +87,7 @@ def getter(groups):
     # Sets attributes
     atrs = ["cn", "displayName", "member", "descripion"]
 
-    results = ldapvar.search(basedn, ldap.SCOPE_SUBTREE, filt, atrs)
+    results = ldapvar.search(BADESN, ldap.SCOPE_SUBTREE, filt, atrs)
 
     result_set = {}
     # Sets result to an empty dictionary
@@ -129,6 +138,9 @@ def getter(groups):
 
 
 def putter(groups):
+    '''
+    This is the function to put the information together in one
+    '''
 
     # Sets command to variable and runs command using cl
     # also loads json file.
@@ -181,6 +193,9 @@ def putter(groups):
                 cl(macmd)
 
 def main():
+    '''
+    This is the main function that causes the others to be called
+    '''
     # Sys exit 1 if not enough args
     if len(sys.argv) < 2:
         print "Usage: {0} <groups-file>".format(sys.argv[0])
