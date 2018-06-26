@@ -81,26 +81,26 @@ def getter(groups):
     # Sets result to an empty dictionary
 
     for result_data in results:
-            name = result_data[1]['displayName'][0]
-            # Replaces " " with _20 which is ascii space
-            key = name.replace(" ", "_20")
-            print name
-            # Sets an empty list
-            resultdatalist = {}
-            resultdatalist["members"] = ldap_flatusers(result_data[1]['member'], ldapvar)
-            resultdatalist["description"] = name
-            # Grabs a role and key from groups
-            resultdatalist["role"] = groups[key]["role"]
-            # if groups[key] is true then it grabs
-            # project from groups[key]['project']
-            if "project" in groups[key].keys():
-                resultdatalist["project"] = groups[key]["project"]
-            # If description is in result_data then it
-            # Grabs the description from the result_data
-            if "description" in result_data:
-                resultdatalist["description"] = result_data[1]['description'][0]
-            # Sets the name of the results to d
-            result_set[name] = resultdatalist
+        name = result_data[1]['displayName'][0]
+        # Replaces " " with _20 which is ascii space
+        key = name.replace(" ", "_20")
+        print name
+        # Sets an empty list
+        resultdatalist = {}
+        resultdatalist["members"] = ldap_flatusers(result_data[1]['member'], ldapvar)
+        resultdatalist["description"] = name
+        # Grabs a role and key from groups
+        resultdatalist["role"] = groups[key]["role"]
+        # if groups[key] is true then it grabs
+        # project from groups[key]['project']
+        if "project" in groups[key].keys():
+            resultdatalist["project"] = groups[key]["project"]
+        # If description is in result_data then it
+        # Grabs the description from the result_data
+        if "description" in result_data:
+            resultdatalist["description"] = result_data[1]['description'][0]
+        # Sets the name of the results to d
+        result_set[name] = resultdatalist
     ldapvar.unbind_s()
     print result_set
     # Returns result_set to putter
