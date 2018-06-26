@@ -8,14 +8,14 @@ import sys
 import os
 import argparse
 from subprocess import Popen, PIPE
-from ConfigParser import SafeConfigParser
+from ConfigParser import SafeConfigParser, NoSectionError
 import ldap
 import ldap.sasl
 
 
 PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
-PARSER.add_argument('--config', type=str, help='This is the json file to use')
+PARSER.add_argument('--config', type=str, help='This is the config file to use')
 ARGS = PARSER.parse_args()
 # Section grabs config
 CONFIGPARSER = SafeConfigParser()
@@ -23,12 +23,14 @@ if ARGS.config:
     CONFIGPARSER.read(ARGS.config)
 if not ARGS.config:
     CONFIGPARSER.read('./etc/openstack-utils/config.ini')
-
-USER = CONFIGPARSER.get('ad', 'userdn')
-PWD = CONFIGPARSER.get('ad', 'password')
-HOST = CONFIGPARSER.get('ad', 'host')
-BASEDN = CONFIGPARSER.get('ad', 'basedn')
-DOMAIN = CONFIGPARSER.get('openstack', 'domain')
+try:
+    USER = CONFIGPARSER.get('ad', 'userdn')
+    PWD = CONFIGPARSER.get('ad', 'password')
+    HOST = CONFIGPARSER.get('ad', 'host')
+    BASEDN = CONFIGPARSER.get('ad', 'basedn')
+    DOMAIN = CONFIGPARSER.get('openstack', 'domain')
+except NoSectionError:
+    print("No config file")
 ENV = os.environ.copy()
 
 
@@ -75,13 +77,16 @@ def getter(groups):
     try:
         ldapvar.simple_bind_s(USER, PWD)
     except ldap.LDAPError, error:
-        print error
+        print error.message['desc']
     qurl = ["(|"] + ["(cn="+g.replace("_20", " ") + ")" for g in groups] + [")"]
     # Should be returning (|(cn= ))
     filt = "".join(qurl)
     # Sets attributes
     atrs = ["cn", "displayName", "member", "descripion"]
-    results = ldapvar.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+    try:
+        results = ldapvar.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+    except ldap.SERVER_DOWN:
+        sys.exit(1)
     result_set = {}
     # Sets result to an empty dictionary
 
