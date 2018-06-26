@@ -7,18 +7,18 @@ import os
 from subprocess import Popen, PIPE
 from ConfigParser import SafeConfigParser
 
-configparser = SafeConfigParser()
+CONFIGPARSER = SafeConfigParser()
 
 
 # Section grabs config
 #try:
 if True:
-    configparser.read('./etc/openstack-utils/config.ini')
-    user = configparser.get('ad', 'userdn')
-    pwd = configparser.get('ad', 'password')
-    host = configparser.get('ad', 'host')
-    basedn = configparser.get('ad', 'basedn')
-    domain = configparser.get('openstack', 'domain')
+    CONFIGPARSER.read('./etc/openstack-utils/config.ini')
+    USER = CONFIGPARSER.get('ad', 'userdn')
+    PWD = CONFIGPARSER.get('ad', 'password')
+    HOST = CONFIGPARSER.get('ad', 'host')
+    basedn = CONFIGPARSER.get('ad', 'basedn')
+    DOMAIN = CONFIGPARSER.get('openstack', 'domain')
 # Section grabs config - Close
 # Exception
 # except:
@@ -26,51 +26,51 @@ if True:
 #         sys.exit(1)
 # Close Exception
 
-env = os.environ.copy()
+ENV = os.environ.copy()
 
 
 # Use command in commandline usage: cl(commandvariable)
-def cl(c):
-    p = Popen(c, shell=True, stdout=PIPE, env=env)
-    print c
-    return p.communicate()[0]
+def cl(command):
+    pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
+    print command
+    return pcommand.communicate()[0]
 # Closing cl definition
 
 
-def ldap_flatusers(members, ld):
-    ms = []
-    for m in members:
+def ldap_flatusers(members, ldapvar):
+    memberstring = []
+    for i in members:
         # splits var s by ,
-        s = m.split(",")
+        msplitvar = i.split(",")
 
-        basedn = ",".join(s[1:])
-        filt = s[0]
+        basedn = ",".join(msplitvar[1:])
+        filt = msplitvar[0]
         props = ["cn", "displayName", "member"]
-        results = ld.search(basedn, ldap.SCOPE_SUBTREE, filt, props)
+        results = ldapvar.search(basedn, ldap.SCOPE_SUBTREE, filt, props)
 
         while 1:
-            result_type, result_data = ld.result(results, 0)
-            if(result_data == []):
+            result_type, result_data = ldapvar.result(results, 0)
+            if result_data == []:
                 break
             else:
                 if result_type == ldap.RES_SEARCH_ENTRY:
                     if 'member' in result_data[0][1]:
                         mems = result_data[0][1]['member']
-                        ms = ms + ldap_flatusers(mems, ld)
+                        memberstring = memberstring + ldap_flatusers(mems, ldapvar)
                     else:  # is a user
-                        ms.append(result_data[0][1]['cn'][0])
-    return ms
+                        memberstring.append(result_data[0][1]['cn'][0])
+    return memberstring
 
 # Function for getting groups variable
 def getter(groups):
     # Uses ldap.open to grab hostlist
-    ld = ldap.open(host)
-    ld.protocol_version = ldap.VERSION3
+    ldapvar = ldap.open(HOST)
+    ldapvar.protocol_version = ldap.VERSION3
     # Attempts to bind simple strings to the person.
     try:
-        ld.simple_bind_s(user, pwd)
-    except ldap.LDAPError, e:
-        print e
+        ldapvar.simple_bind_s(USER, PWD)
+    except ldap.LDAPError, error:
+        print error
 
     qurl = ["(|"] + ["(cn="+g.replace("_20", " ") + ")" for g in groups] + [")"]
     # Should be returning (|(cn= ))
@@ -78,13 +78,13 @@ def getter(groups):
     # Sets attributes
     atrs = ["cn", "displayName", "member", "descripion"]
 
-    results = ld.search(basedn, ldap.SCOPE_SUBTREE, filt, atrs)
+    results = ldapvar.search(basedn, ldap.SCOPE_SUBTREE, filt, atrs)
 
     result_set = {}
     # Sets result to an empty dictionary
     while 1:
-        result_type, result_data = ld.result(results, 0)
-        if(result_data == []):
+        result_type, result_data = ldapvar.result(results, 0)
+        if result_data == []:
             break
         else:
             if result_type == ldap.RES_SEARCH_ENTRY:
@@ -96,26 +96,26 @@ def getter(groups):
                 print name
 
                 # Sets an empty list
-                d = {}
-                d["members"] = ldap_flatusers(result_data[0][1]['member'], ld)
-                d["description"] = name
+                resultdatalist = {}
+                resultdatalist["members"] = ldap_flatusers(result_data[0][1]['member'], ldapvar)
+                resultdatalist["description"] = name
                 # Grabs a role and key from groups
-                d["role"] = groups[key]["role"]
+                resultdatalist["role"] = groups[key]["role"]
 
                 # if groups[key] is true then it grabs
                 # project from groups[key]['project']
                 if "project" in groups[key].keys():
-                    d["project"] = groups[key]["project"]
+                    resultdatalist["project"] = groups[key]["project"]
 
                 # If description is in result_data then it
                 # Grabs the description from the result_data
                 if "description" in result_data:
-                    d["description"] = result_data[0][1]['description'][0]
+                    resultdatalist["description"] = result_data[0][1]['description'][0]
 
                 # Sets the name of the reusults to d
-                result_set[name] = d
+                result_set[name] = resultdatalist
                 # result_set.append(d)
-    ld.unbind_s()
+    ldapvar.unbind_s()
 
     # Prints what was resulted from the while 1: loop
     print result_set
@@ -138,19 +138,19 @@ def putter(groups):
 
     projectstring = [c["Name"] for c in projectc]
 
-    for g in groups.keys():
-        members = groups[g]["members"]
-        name = g
+    for i in groups.keys():
+        members = groups[i]["members"]
+        name = i
         project = name
         # Sets a project to a profile is there is a linked project found
         if "project" in groups[name].keys():
-            project = groups[g]["project"]
-        role = groups[g]["role"]
-        description = groups[g]["description"]
+            project = groups[i]["project"]
+        role = groups[i]["role"]
+        description = groups[i]["description"]
 
         if project not in projectstring:
             # Run this command if there is no projectstring
-            projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(domain,description, project)
+            projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
             cl(projectcreatecmd)
 
         # Command line to grab JSON file
@@ -167,6 +167,7 @@ def putter(groups):
             print projectmember
             projectmemberlist.append(projectmember["Name"])
 
+        #unused?
         projectmemberstring = [c["Name"] for c in projectmemberc]
         # Print current members and project members
         print "members"
@@ -176,24 +177,27 @@ def putter(groups):
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
-                macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, domain, role)
+                macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, role)
                 cl(macmd)
 
-
-if __name__ == "__main__":
+def main():
     # Sys exit 1 if not enough args
     if len(sys.argv) < 2:
         print "Usage: {0} <groups-file>".format(sys.argv[0])
         sys.exit(1)
     else:
-        with open(sys.argv[1]) as f:
+        with open(sys.argv[1]) as openfile:
             # fl = f.read().split("\n")[:-1]
 
             # Loads json file into commandline from sysargs
-            groupdata = json.load(f)
+            groupdata = json.load(openfile)
             print groupdata
             # Runs the groupdata loaded through getter
             groupdata = getter(groupdata)
             # Runs output from getter through putter
             # Current command is putter(getter(groupdata))
             putter(groupdata)
+
+
+if __name__ == "__main__":
+    main()
