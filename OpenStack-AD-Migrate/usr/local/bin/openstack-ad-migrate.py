@@ -7,6 +7,7 @@ import json
 import sys
 import os
 import argparse
+import logging
 from subprocess import Popen, PIPE
 from ConfigParser import SafeConfigParser, NoSectionError
 import ldap
@@ -19,10 +20,15 @@ PARSER.add_argument('--config', type=str, help='This is the config file to use')
 ARGS = PARSER.parse_args()
 # Section grabs config
 CONFIGPARSER = SafeConfigParser()
+logging.basicConfig(filename='logging.log', level=logging.DEBUG)
+logging.info("Checking config file")
 if ARGS.config:
     CONFIGPARSER.read(ARGS.config)
+    logging.debug("commandline config file found")
 if not ARGS.config:
     CONFIGPARSER.read('./etc/openstack-utils/config.ini')
+    logging.info("non-commandline config file found")
+logging.info("attempting to read config file")
 try:
     USER = CONFIGPARSER.get('ad', 'userdn')
     PWD = CONFIGPARSER.get('ad', 'password')
@@ -30,6 +36,7 @@ try:
     BASEDN = CONFIGPARSER.get('ad', 'basedn')
     DOMAIN = CONFIGPARSER.get('openstack', 'domain')
 except NoSectionError:
+    logging.info("config file not found")
     print("No config file")
 ENV = os.environ.copy()
 
@@ -39,7 +46,9 @@ def cl(command):
     This is a command line function
     '''
     pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
-    print command
+
+    logging.debug("running command: %s", command)
+    print ("running ", command)
     return pcommand.communicate()[0]
 
 
@@ -61,6 +70,7 @@ def ldap_flatusers(members, ldapvar):
                 mems = result_data[0][1]['member']
                 memberstring = memberstring + ldap_flatusers(mems, ldapvar)
             else:  # is a user
+                logging.info("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
                 memberstring.append(result_data[0][1]['cn'][0])
     return memberstring
 
@@ -71,7 +81,12 @@ def getter(groups):
     This is the script that gets the information
     '''
     # Uses ldap.open to grab hostlist
-    ldapvar = ldap.open(HOST)
+    logging.info("opening HOST from config with ldap")
+    try:
+        ldapvar = ldap.open(HOST)
+    except NameError, error:
+        print("NameError %s failed" % "ldap.open(HOST)")
+        sys.exit(1)
     ldapvar.protocol_version = ldap.VERSION3
     # Attempts to bind simple strings to the person.
     try:
@@ -123,6 +138,7 @@ def putter(groups):
     '''
     projectc = json.loads(cl("openstack project list -f json --noindent"))
     projectstring = [c["Name"] for c in projectc]
+    logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
     for i in groups.keys():
         members = groups[i]["members"]
         project = i
@@ -134,13 +150,16 @@ def putter(groups):
             # Run this command if there is no projectstring
             projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
             cl(projectcreatecmd)
+            logging.info("Running command %s because %s is not in %s", projectcreatecmd, project, projectstring)
         # Command line to grab JSON file
         projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
         # Loads project memebers from a json file
+        logging.info("Running command %s for grabbing a JSON file", projectmembercmd)
         projectmemberc = json.loads(cl(projectmembercmd))
         projectmemberlist = []
         # Iterates over projectmember list
         for i in projectmemberc:
+            logging.info("adding %s to %s", i, projectmemberlist)
             print i
             projectmemberlist.append(i["Name"])
         # Print current members and project members
@@ -151,7 +170,7 @@ def putter(groups):
             if member not in projectmemberlist:
                 macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
                 cl(macmd)
-
+                logging.info("Running %s for %s is not in %s", macmd, member, projectmemberlist)
 
 def main():
     '''
@@ -164,8 +183,10 @@ def main():
     if ARGS.input:
         with open(sys.argv[1]) as openfile:
             # Loads json file into commandline from sysargs
+            logging.info("loading JSON file")
             groupdata = json.load(openfile)
             print groupdata
+            logging.debug("running putter(getter(groupdata))")
             putter(getter(groupdata))
 
 
