@@ -14,13 +14,23 @@ import ldap
 import ldap.sasl
 
 
+
 PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
 PARSER.add_argument('--config', type=str, help='This is the config file to use')
+PARSER.add_argument('--debug', type=str, help='This is the debug setting for the logger')
 ARGS = PARSER.parse_args()
-CONFIGPARSER = SafeConfigParser()
 
-logging.basicConfig(filename='logging.log', level=logging.DEBUG)
+if ARGS.debug:
+    LOG_LEVEL = logging.DEBUG
+if not ARGS.debug:
+    LOG_LEVEL = logging.info
+
+logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s',
+level=LOG_LEVEL, datefmt='%m/%d/%Y %I:%M:%S %p', filename='logging.log')
+
+CONFIGPARSER = SafeConfigParser()
+# logging.basicConfig(, level=logging.info)
 logging.info("Checking config file")
 
 if ARGS.config:
@@ -40,7 +50,7 @@ try:
     DOMAIN = CONFIGPARSER.get('openstack', 'domain')
 except NoSectionError:
     logging.info("config file not found")
-    print("No config file")
+    # print("No config file")
 
 ENV = os.environ.copy()
 
@@ -112,7 +122,7 @@ def getter(groups):
         name = result_data[1]['displayName'][0]
         # Replaces " " with _20 which is ascii space
         key = name.replace(" ", "_20")
-        print name
+        # print name
         # Sets an empty list
         resultdatalist = {}
         resultdatalist["members"] = ldap_flatusers(result_data[1]['member'], ldapvar)
@@ -131,7 +141,7 @@ def getter(groups):
         result_set[name] = resultdatalist
         logging.debug("info result_set[name] to resultdatalist")
     ldapvar.unbind_s()
-    print result_set
+    # print result_set
     # Returns result_set to putter
     return result_set
 
@@ -164,11 +174,11 @@ def putter(groups):
         # Iterates over projectmember list
         for i in projectmemberc:
             logging.debug("adding %s to %s", i, projectmemberlist)
-            print i
+            # print i
             projectmemberlist.append(i["Name"])
         # Print current members and project members
-        print "members \n"+str(members)
-        print "projectmembers \n"+str(projectmemberc)
+        # print "members \n"+str(members)
+        # print "projectmembers \n"+str(projectmemberc)
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
@@ -181,18 +191,19 @@ def main():
     This is the main function that causes the others to be called
     '''
     # Sys exit 1 if not enough args
+    logging.info("PROGRAM STARTING")
     if not ARGS.input:
-        print "Usage: {0} <groups-file>".format(sys.argv[0])
+        # print "Usage: {0} <groups-file>".format(sys.argv[0])
         sys.exit(1)
     if ARGS.input:
         with open(sys.argv[1]) as openfile:
             # Loads json file into commandline from sysargs
             logging.info("loading JSON file")
             groupdata = json.load(openfile)
-            print groupdata
+            # print groupdata
             logging.debug("running putter(getter(groupdata))")
             putter(getter(groupdata))
-
+    logging.info("PROGRAM ENDING")
 
 if __name__ == "__main__":
     main()
