@@ -18,17 +18,20 @@ PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
 PARSER.add_argument('--config', type=str, help='This is the config file to use')
 ARGS = PARSER.parse_args()
-# Section grabs config
 CONFIGPARSER = SafeConfigParser()
+
 logging.basicConfig(filename='logging.log', level=logging.DEBUG)
 logging.info("Checking config file")
+
 if ARGS.config:
     CONFIGPARSER.read(ARGS.config)
     logging.debug("commandline config file found")
 if not ARGS.config:
     CONFIGPARSER.read('./etc/openstack-utils/config.ini')
     logging.info("non-commandline config file found")
+
 logging.info("attempting to read config file")
+
 try:
     USER = CONFIGPARSER.get('ad', 'userdn')
     PWD = CONFIGPARSER.get('ad', 'password')
@@ -38,6 +41,7 @@ try:
 except NoSectionError:
     logging.info("config file not found")
     print("No config file")
+
 ENV = os.environ.copy()
 
 
@@ -47,8 +51,7 @@ def cl(command):
     '''
     pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
 
-    logging.debug("running command: %s", command)
-    print ("running ", command)
+    logging.info("running command: %s", command)
     return pcommand.communicate()[0]
 
 
@@ -70,7 +73,7 @@ def ldap_flatusers(members, ldapvar):
                 mems = result_data[0][1]['member']
                 memberstring = memberstring + ldap_flatusers(mems, ldapvar)
             else:  # is a user
-                logging.info("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
+                logging.debug("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
                 memberstring.append(result_data[0][1]['cn'][0])
     return memberstring
 
@@ -126,6 +129,7 @@ def getter(groups):
             resultdatalist["description"] = result_data[1]['description'][0]
         # Sets the name of the results to d
         result_set[name] = resultdatalist
+        logging.debug("info result_set[name] to resultdatalist")
     ldapvar.unbind_s()
     print result_set
     # Returns result_set to putter
@@ -150,7 +154,7 @@ def putter(groups):
             # Run this command if there is no projectstring
             projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
             cl(projectcreatecmd)
-            logging.info("Running command %s because %s is not in %s", projectcreatecmd, project, projectstring)
+            logging.debug("Running command %s because %s is not in %s", projectcreatecmd, project, projectstring)
         # Command line to grab JSON file
         projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
         # Loads project memebers from a json file
@@ -159,7 +163,7 @@ def putter(groups):
         projectmemberlist = []
         # Iterates over projectmember list
         for i in projectmemberc:
-            logging.info("adding %s to %s", i, projectmemberlist)
+            logging.debug("adding %s to %s", i, projectmemberlist)
             print i
             projectmemberlist.append(i["Name"])
         # Print current members and project members
@@ -170,7 +174,7 @@ def putter(groups):
             if member not in projectmemberlist:
                 macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
                 cl(macmd)
-                logging.info("Running %s for %s is not in %s", macmd, member, projectmemberlist)
+                logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
 
 def main():
     '''
