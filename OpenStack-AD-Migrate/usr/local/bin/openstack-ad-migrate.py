@@ -24,11 +24,11 @@ ARGS = PARSER.parse_args()
 if ARGS.debug:
     LOG_LEVEL = logging.DEBUG
 if not ARGS.debug:
-    LOG_LEVEL = logging.info
+    LOG_LEVEL = logging.INFO
 
 logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s',
-level=LOG_LEVEL, datefmt='%m/%d/%Y %I:%M:%S %p', filename='logging.log')
-
+level=LOG_LEVEL, datefmt='%d/%m/%Y | %I:%M:%S %p | ', filename='logging.log')
+logging.info("PROGRAM STARTING")
 CONFIGPARSER = SafeConfigParser()
 # logging.basicConfig(, level=logging.info)
 logging.info("Checking config file")
@@ -191,7 +191,7 @@ def main():
     This is the main function that causes the others to be called
     '''
     # Sys exit 1 if not enough args
-    logging.info("PROGRAM STARTING")
+
     if not ARGS.input:
         # print "Usage: {0} <groups-file>".format(sys.argv[0])
         sys.exit(1)
