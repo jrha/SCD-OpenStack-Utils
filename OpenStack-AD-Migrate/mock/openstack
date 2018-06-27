@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+import sys
+import argparse
+
+
+"""
+openstack project list -f json --noindent
+openstack project create --domain '{0}' --description '{1}' '{2}'
+openstack user list --project '{0}' -f json --noindent
+openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'
+"""
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('object')
+    parser.add_argument('action')
+    args = parser.parse_known_args()[0]
+
+    if args.object == 'project':
+        if args.action == 'list':
+            print '[{"ID": "d8b776c30bf1468697bc80d7f76f5f66", "Name": "stfctesting"}]'
+        elif args.action == 'create':
+            sys.exit(0)
+        else:
+            print "Unsupported"
+            sys.exit(1)
+    elif args.object == 'user':
+        print "[]"
+    elif args.object == 'role':
+        sys.exit(0)
+    else:
+        print "Unsupported"
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
