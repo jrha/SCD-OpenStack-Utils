@@ -59,6 +59,7 @@ def cl(command):
     '''
     This is a command line function
     '''
+
     pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
 
     logging.info("running command: %s", command)
@@ -151,24 +152,27 @@ def putter(groups):
     This is the function to put the information together in one
     '''
     projectc = json.loads(cl("openstack project list -f json --noindent"))
+    print projectc
     projectstring = [c["Name"] for c in projectc]
+    print projectstring
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
     for i in groups.keys():
         members = groups[i]["members"]
         project = i
         # Sets a project to a profile is there is a linked project found
         if "project" in groups[i].keys():
-            project = groups[i]["project"]
+            project = groups[i]["name"]
         description = groups[i]["description"]
         if project not in projectstring:
             # Run this command if there is no projectstring
             projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
             cl(projectcreatecmd)
-            logging.debug("Running command %s because %s is not in %s", projectcreatecmd, project, projectstring)
+            logging.info(projectcreatecmd)
+            logging.debug("running command: %s because %s is not in %s", projectcreatecmd, project, projectstring)
         # Command line to grab JSON file
         projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
         # Loads project memebers from a json file
-        logging.info("Running command %s for grabbing a JSON file", projectmembercmd)
+        logging.info("running command %s for grabbing a JSON file", projectmembercmd)
         projectmemberc = json.loads(cl(projectmembercmd))
         projectmemberlist = []
         # Iterates over projectmember list
