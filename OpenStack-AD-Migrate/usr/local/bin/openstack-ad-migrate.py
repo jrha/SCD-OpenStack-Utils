@@ -26,8 +26,8 @@ if ARGS.debug:
 if not ARGS.debug:
     LOG_LEVEL = logging.INFO
 
-logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s',
-level=LOG_LEVEL, datefmt='%d/%m/%Y | %I:%M:%S %p | ', filename='logging.log')
+logging.basicConfig(format='%(asctime)s | %(levelname)s : %(message)s',
+level=LOG_LEVEL, datefmt='%d/%m/%Y | %I:%M:%S %p', filename='logging.log')
 logging.info("PROGRAM STARTING")
 CONFIGPARSER = SafeConfigParser()
 # logging.basicConfig(, level=logging.info)
