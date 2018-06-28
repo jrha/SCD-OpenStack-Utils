@@ -78,23 +78,24 @@ def openstack_user_list(project):
     logging.info("running command %s for grabbing a JSON file", projectmembercmd)
     return json.loads(cl(projectmembercmd))
 
+
 def openstack_project_list():
     projectc = json.loads(cl("openstack project list -f json --noindent"))
     projectstring = [c["Name"] for c in projectc]
-    print projectc
-    print projectstring
     return projectstring
 
-def projectmemberget(member, project, groups, i, projectmemberlist):
+
+def openstack_role_add(member, project, groups, i, projectmemberlist):
     macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
-    cl(macmd)
     logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
+    cl(macmd)
+
 
 def openstack_project_create(description, project, projectstring):
     projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
-    cl(projectcreatecmd)
-    logging.info(projectcreatecmd)
     logging.debug("running command: %s because %s is not in %s", projectcreatecmd, project, projectstring)
+    cl(projectcreatecmd)
+
 
 def ldap_flatusers(members):
     '''
@@ -130,7 +131,6 @@ def ldapgrabber(groups):
     logging.info("ldapgrabber function starting")
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
-
     LDAPVAR.protocol_version = ldap.VERSION3
     # Attempts to bind simple strings to the person.
     try:
@@ -144,7 +144,6 @@ def ldapgrabber(groups):
     atrs = ["cn", "displayName", "member", "descripion"]
     try:
         results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
-        print("Results")
     except ldap.SERVER_DOWN:
         print(error.message['desc'])
         logging.critical(error.message['desc'])
@@ -223,7 +222,7 @@ def putter(groups):
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
-                projectmemberget(member, project, groups, i, projectmemberlist)
+                openstack_role_add(member, project, groups, i, projectmemberlist)
     logging.info("putter function ending")
 def main():
     '''
