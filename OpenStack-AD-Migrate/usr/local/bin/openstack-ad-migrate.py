@@ -58,13 +58,6 @@ except NoSectionError:
     logging.info("config file not found")
     # print("No config file")
 
-try:
-    LDAPVAR = ldap.open(HOST)
-except NameError, error:
-    print("NameError ldap.open(HOST) failed")
-    logging.critical("NameError ldap.open(HOST) failed")
-    sys.exit(1)
-
 
 ENV = os.environ.copy()
 
@@ -110,7 +103,7 @@ def openstack_project_create(description, project):
     cl(projectcreatecmd)
 
 
-def ldap_flatusers(members):
+def ldap_flatusers(members, ldap_session):
     '''
     This section is to add the results to a table for the program to use
     later on
@@ -123,12 +116,12 @@ def ldap_flatusers(members):
         basedn = BASEDN
         basedn = ",".join(msplitvar[1:])
         props = ["cn", "displayName", "member"]
-        results = LDAPVAR.search(basedn, ldap.SCOPE_SUBTREE, msplitvar[0], props)
-        result_type, result_data = LDAPVAR.result(results, 0)
+        results = ldap_session.search(basedn, ldap.SCOPE_SUBTREE, msplitvar[0], props)
+        result_type, result_data = ldap_session.result(results, 0)
         if result_type == ldap.RES_SEARCH_ENTRY and result_data != []:
             if 'member' in result_data[0][1]:
                 mems = result_data[0][1]['member']
-                memberstring = memberstring + ldap_flatusers(mems)
+                memberstring = memberstring + ldap_flatusers(mems, ldap_session)
             else:  # is a user
                 logging.debug("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
                 memberstring.append(result_data[0][1]['cn'][0])
@@ -137,18 +130,17 @@ def ldap_flatusers(members):
 
 
 # Function for getting groups variable
-def ldapgrabber(groups):
+def ldapgrabber(groups, ldap_session):
     '''
     This is the script that gets the information using ldap
     '''
     logging.info("ldapgrabber function starting")
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
-    LDAPVAR.protocol_version = ldap.VERSION3
 
     # Bind to LDAP server
     try:
-        LDAPVAR.simple_bind_s(USER, PWD)
+        ldap_session.simple_bind_s(USER, PWD)
     except ldap.LDAPError, error:
         print error.message['desc']
 
@@ -156,7 +148,7 @@ def ldapgrabber(groups):
     # Sets attributes
 
     try:
-        results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, LDAP_ATTRS)
+        results = ldap_session.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, LDAP_ATTRS)
     except ldap.SERVER_DOWN:
         print(error.message['desc'])
         logging.critical(error.message['desc'])
@@ -165,12 +157,12 @@ def ldapgrabber(groups):
     return results
 
 
-def getter(groups):
+def getter(groups, ldap_session):
     '''
     This section is to sort through the json file it grabs from ldapgrabberself
     '''
     logging.info("Getter function starting")
-    results = ldapgrabber(groups)
+    results = ldapgrabber(groups, ldap_session)
     result_set = {}
 
     for result_data in results:
@@ -180,7 +172,7 @@ def getter(groups):
         role = groups[name]["role"]
 
         resultdatalist = {
-            "members" : ldap_flatusers(member),
+            "members" : ldap_flatusers(member, ldap_session),
             "description" : name,
             "role" : role,
         }
@@ -247,14 +239,28 @@ def main():
         sys.exit(1)
     if ARGS.input:
         with open(sys.argv[1]) as openfile:
-            # Loads json file into commandline from sysargs
-            logging.info("loading JSON file")
+            # Load json group file
+            logging.info("loading JSON group file")
             groupdata = json.load(openfile)
             groupdata = {k.replace("_20", " "):v for k, v in groupdata.iteritems()}
-            logging.debug("running putter(getter(groupdata))")
-            putter(getter(groupdata))
+
+            # Connect to LDAP server
+            try:
+                ldap_session = ldap.open(HOST)
+            except NameError, error:
+                print("NameError ldap.open(HOST) failed")
+                logging.critical("NameError ldap.open(HOST) failed")
+                sys.exit(1)
+            ldap_session.protocol_version = ldap.VERSION3
+
+            # The real meat
+            logging.debug("running putter(getter(...))")
+            putter(getter(groupdata, ldap_session))
+
+            # Disconnect from LDAP server
+            ldap_session.unbind_s()
+
     logging.info("PROGRAM ENDING")
-    LDAPVAR.unbind_s()
 
 
 if __name__ == "__main__":
