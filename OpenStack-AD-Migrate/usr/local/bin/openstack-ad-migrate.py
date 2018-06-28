@@ -55,7 +55,8 @@ except NoSectionError:
 try:
     LDAPVAR = ldap.open(HOST)
 except NameError, error:
-    print("NameError %s failed" % "ldap.open(HOST)")
+    print("NameError ldap.open(HOST) failed")
+    logging.critical("NameError ldap.open(HOST) failed")
     sys.exit(1)
 
 
@@ -64,19 +65,19 @@ ENV = os.environ.copy()
 
 def cl(command):
     '''
-    This is a command line function
+    This is a function for command line scripts to be run
     '''
-
     pcommand = Popen(command, shell=True, stdout=PIPE, env=ENV)
-
-    logging.info("running command: %s", command)
+    logging.info("running command: %s in cl function", command)
     return pcommand.communicate()[0]
 
 
 def ldap_flatusers(members):
     '''
-    This section is to add the results to the table
+    This section is to add the results to a table for the program to use
+    later on
     '''
+    logging.info("ldap_flatusers function starting")
     memberstring = []
     for i in members:
         # splits msplitvar by ,
@@ -93,14 +94,16 @@ def ldap_flatusers(members):
             else:  # is a user
                 logging.debug("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
                 memberstring.append(result_data[0][1]['cn'][0])
+    logging.info("ldap_flatusers function ending")
     return memberstring
 
 
 # Function for getting groups variable
 def ldapgrabber(groups):
     '''
-    This is the script that gets the information
+    This is the script that gets the information using ldap
     '''
+    logging.info("ldapgrabber function starting")
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
 
@@ -119,25 +122,34 @@ def ldapgrabber(groups):
         results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
         print("Results")
     except ldap.SERVER_DOWN:
+        print(error.message['desc'])
+        logging.critical(error.message['desc'])
         sys.exit(1)
+    logging.info("ldapgrabber function ending")
     return results
 
 
     # Sets result to an empty dictionary
 def getter(groups):
+    '''
+    This section is to sort through the json file it grabs from ldapgrabberself
+    '''
+    logging.info("Getter function starting")
     results = ldapgrabber(groups)
     result_set = {}
     for result_data in results:
+        # Replaces " " with _20 which is ascii space and sets variables
         name = result_data[1]['displayName'][0]
-        # Replaces " " with _20 which is ascii space
         key = name.replace(" ", "_20")
+        member = result_data[1]['member']
+        role = groups[key]["role"]
         # print name
         # Sets an empty list
         resultdatalist = {}
-        resultdatalist["members"] = ldap_flatusers(result_data[1]['member'])
+        resultdatalist["members"] = ldap_flatusers(member)
         resultdatalist["description"] = name
         # Grabs a role and key from groups
-        resultdatalist["role"] = groups[key]["role"]
+        resultdatalist["role"] = role
         # if groups[key] is true then it grabs
         # project from groups[key]['project']
         if "project" in groups[key].keys():
@@ -146,25 +158,27 @@ def getter(groups):
         # Grabs the description from the result_data
         if "description" in result_data:
             resultdatalist["description"] = result_data[1]['description'][0]
-        # Sets the name of the results to d
+        # Sets the name of the results to result_set[name]
         result_set[name] = resultdatalist
         logging.debug("info result_set[name] to resultdatalist %s", result_set[name])
-        print("result_set[name] to resultdatalist %s" % result_set[name])
     LDAPVAR.unbind_s()
     # print result_set
     # Returns result_set to putter
+    logging.info("Getter function ending")
     return result_set
 
 
 def putter(groups):
     '''
-    This is the function to put the information together in one
+    This is the function to put the information gathered from getter
+    into commands to run and use
     '''
-    projectc = json.loads(cl("openstack project list -f json --noindent"))
-    print projectc
-    projectstring = [c["Name"] for c in projectc]
-    print projectstring
+    logging.info("putter function starting")
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
+    projectc = json.loads(cl("openstack project list -f json --noindent"))
+    projectstring = [c["Name"] for c in projectc]
+    print projectc
+    print projectstring
     for i in groups.keys():
         members = groups[i]["members"]
         project = i
@@ -189,16 +203,13 @@ def putter(groups):
             logging.debug("adding %s to %s", i, projectmemberlist)
             # print i
             projectmemberlist.append(i["Name"])
-        # Print current members and project members
-        # print "members \n"+str(members)
-        # print "projectmembers \n"+str(projectmemberc)
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
                 macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
                 cl(macmd)
                 logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
-
+    logging.info("putter function starting")
 def main():
     '''
     This is the main function that causes the others to be called
@@ -206,14 +217,14 @@ def main():
     # Sys exit 1 if not enough args
 
     if not ARGS.input:
-        # print "Usage: {0} <groups-file>".format(sys.argv[0])
+        print "Usage: {0} <groups-file>".format(sys.argv[0])
+        logging.critical("groups file not supplied")
         sys.exit(1)
     if ARGS.input:
         with open(sys.argv[1]) as openfile:
             # Loads json file into commandline from sysargs
             logging.info("loading JSON file")
             groupdata = json.load(openfile)
-            # print groupdata
             logging.debug("running putter(getter(groupdata))")
             putter(getter(groupdata))
     logging.info("PROGRAM ENDING")
