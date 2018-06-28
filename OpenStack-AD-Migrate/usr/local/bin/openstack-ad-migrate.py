@@ -223,37 +223,32 @@ def main():
         logging.info("config file not found")
 
 
-    if not args.input:
-        print "Usage: {0} <groups-file>".format(sys.argv[0])
-        logging.critical("groups file not supplied")
-        sys.exit(1)
-    if args.input:
-        with open(sys.argv[1]) as openfile:
-            # Load json group file
-            logging.info("loading JSON group file")
-            groupdata = json.load(openfile)
-            groupdata = {k.replace("_20", " "):v for k, v in groupdata.iteritems()}
+    with open(args.input) as openfile:
+        # Load json group file
+        logging.info("loading JSON group file")
+        groupdata = json.load(openfile)
+        groupdata = {k.replace("_20", " "):v for k, v in groupdata.iteritems()}
 
-            # Connect to LDAP server
-            try:
-                ldap_session = ldap.open(ldap_host)
-            except NameError, error:
-                print("ldap.open(ldap_host) failed")
-                logging.critical("NameError ldap.open(HOST) failed")
-                sys.exit(1)
+        # Connect to LDAP server
+        try:
+            ldap_session = ldap.open(ldap_host)
+        except NameError, error:
+            print("ldap.open(ldap_host) failed")
+            logging.critical("NameError ldap.open(HOST) failed")
+            sys.exit(1)
 
-            # Bind to LDAP server
-            try:
-                ldap_session.simple_bind_s(ldap_user, ldap_pass)
-            except ldap.LDAPError, error:
-                print error.message['desc']
+        # Bind to LDAP server
+        try:
+            ldap_session.simple_bind_s(ldap_user, ldap_pass)
+        except ldap.LDAPError, error:
+            print error.message['desc']
 
-            # The real meat
-            logging.debug("running putter(getter(...))")
-            putter(getter(groupdata, ldap_session, ldap_basedn), openstack_domain)
+        # The real meat
+        logging.debug("running putter(getter(...))")
+        putter(getter(groupdata, ldap_session, ldap_basedn), openstack_domain)
 
-            # Disconnect from LDAP server
-            ldap_session.unbind_s()
+        # Disconnect from LDAP server
+        ldap_session.unbind_s()
 
     logging.info("PROGRAM ENDING")
 
