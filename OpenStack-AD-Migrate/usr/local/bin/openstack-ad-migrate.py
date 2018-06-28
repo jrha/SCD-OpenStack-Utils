@@ -52,6 +52,13 @@ except NoSectionError:
     logging.info("config file not found")
     # print("No config file")
 
+try:
+    LDAPVAR = ldap.open(HOST)
+except NameError, error:
+    print("NameError %s failed" % "ldap.open(HOST)")
+    sys.exit(1)
+
+
 ENV = os.environ.copy()
 
 
@@ -66,7 +73,7 @@ def cl(command):
     return pcommand.communicate()[0]
 
 
-def ldap_flatusers(members, ldapvar):
+def ldap_flatusers(members):
     '''
     This section is to add the results to the table
     '''
@@ -77,12 +84,12 @@ def ldap_flatusers(members, ldapvar):
         basedn = BASEDN
         basedn = ",".join(msplitvar[1:])
         props = ["cn", "displayName", "member"]
-        results = ldapvar.search(basedn, ldap.SCOPE_SUBTREE, msplitvar[0], props)
-        result_type, result_data = ldapvar.result(results, 0)
+        results = LDAPVAR.search(basedn, ldap.SCOPE_SUBTREE, msplitvar[0], props)
+        result_type, result_data = LDAPVAR.result(results, 0)
         if result_type == ldap.RES_SEARCH_ENTRY and result_data != []:
             if 'member' in result_data[0][1]:
                 mems = result_data[0][1]['member']
-                memberstring = memberstring + ldap_flatusers(mems, ldapvar)
+                memberstring = memberstring + ldap_flatusers(mems)
             else:  # is a user
                 logging.debug("Appending %s to %s", result_data[0][1]['cn'][0], memberstring)
                 memberstring.append(result_data[0][1]['cn'][0])
@@ -90,21 +97,17 @@ def ldap_flatusers(members, ldapvar):
 
 
 # Function for getting groups variable
-def getter(groups):
+def ldapgrabber(groups):
     '''
     This is the script that gets the information
     '''
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
-    try:
-        ldapvar = ldap.open(HOST)
-    except NameError, error:
-        print("NameError %s failed" % "ldap.open(HOST)")
-        sys.exit(1)
-    ldapvar.protocol_version = ldap.VERSION3
+
+    LDAPVAR.protocol_version = ldap.VERSION3
     # Attempts to bind simple strings to the person.
     try:
-        ldapvar.simple_bind_s(USER, PWD)
+        LDAPVAR.simple_bind_s(USER, PWD)
     except ldap.LDAPError, error:
         print error.message['desc']
     qurl = ["(|"] + ["(cn="+g.replace("_20", " ") + ")" for g in groups] + [")"]
@@ -113,12 +116,17 @@ def getter(groups):
     # Sets attributes
     atrs = ["cn", "displayName", "member", "descripion"]
     try:
-        results = ldapvar.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+        results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+        print("Results")
     except ldap.SERVER_DOWN:
         sys.exit(1)
-    result_set = {}
-    # Sets result to an empty dictionary
+    return results
 
+
+    # Sets result to an empty dictionary
+def getter(groups):
+    results = ldapgrabber(groups)
+    result_set = {}
     for result_data in results:
         name = result_data[1]['displayName'][0]
         # Replaces " " with _20 which is ascii space
@@ -126,7 +134,7 @@ def getter(groups):
         # print name
         # Sets an empty list
         resultdatalist = {}
-        resultdatalist["members"] = ldap_flatusers(result_data[1]['member'], ldapvar)
+        resultdatalist["members"] = ldap_flatusers(result_data[1]['member'])
         resultdatalist["description"] = name
         # Grabs a role and key from groups
         resultdatalist["role"] = groups[key]["role"]
@@ -140,8 +148,9 @@ def getter(groups):
             resultdatalist["description"] = result_data[1]['description'][0]
         # Sets the name of the results to d
         result_set[name] = resultdatalist
-        logging.debug("info result_set[name] to resultdatalist")
-    ldapvar.unbind_s()
+        logging.debug("info result_set[name] to resultdatalist %s", result_set[name])
+        print("result_set[name] to resultdatalist %s" % result_set[name])
+    LDAPVAR.unbind_s()
     # print result_set
     # Returns result_set to putter
     return result_set
