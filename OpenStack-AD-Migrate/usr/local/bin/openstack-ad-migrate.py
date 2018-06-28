@@ -15,30 +15,6 @@ import ldap.sasl
 
 
 LDAP_ATTRS = ["cn", "displayName", "member", "descripion"]
-
-
-PARSER = argparse.ArgumentParser(description='Process some stuff.')
-PARSER.add_argument('input', type=str, help='This is the json file to use')
-PARSER.add_argument('--config', type=str, help='This is the config file to use')
-PARSER.add_argument('--debug', action='store_true', help='This is the debug setting for the logger')
-ARGS = PARSER.parse_args()
-
-if ARGS.debug:
-    LOG_LEVEL = logging.DEBUG
-if not ARGS.debug:
-    LOG_LEVEL = logging.INFO
-
-logging.basicConfig(
-    format='%(asctime)s | %(levelname)s : %(message)s',
-    level=LOG_LEVEL,
-    datefmt='%d/%m/%Y | %I:%M:%S %p',
-    filename='logging.log',
-)
-
-logging.info("PROGRAM STARTING")
-
-
-
 ENV = os.environ.copy()
 
 
@@ -205,13 +181,33 @@ def main():
     This is the main function that causes the others to be called
     '''
 
-    configparser = SafeConfigParser()
-    logging.info("Checking config file")
+    parser = argparse.ArgumentParser(description='Process some stuff.')
+    parser.add_argument('input', type=str, help='This is the json file to use')
+    parser.add_argument('--config', type=str, help='This is the config file to use')
+    parser.add_argument('--debug', action='store_true', help='This is the debug setting for the logger')
+    args = parser.parse_args()
 
-    if ARGS.config:
-        configparser.read(ARGS.config)
+    log_level = logging.INFO
+    if args.debug:
+        log_level = logging.DEBUG
+
+    logging.basicConfig(
+        format='%(asctime)s | %(levelname)s : %(message)s',
+        level=log_level,
+        datefmt='%d/%m/%Y | %I:%M:%S %p',
+        filename='logging.log',
+    )
+
+    logging.info("PROGRAM STARTING")
+
+
+    configparser = SafeConfigParser()
+
+    logging.info("Checking config file")
+    if args.config:
+        configparser.read(args.config)
         logging.debug("commandline config file found")
-    if not ARGS.config:
+    else:
         configparser.read('./etc/openstack-utils/config.ini')
         logging.info("non-commandline config file found")
 
@@ -227,11 +223,11 @@ def main():
         logging.info("config file not found")
 
 
-    if not ARGS.input:
+    if not args.input:
         print "Usage: {0} <groups-file>".format(sys.argv[0])
         logging.critical("groups file not supplied")
         sys.exit(1)
-    if ARGS.input:
+    if args.input:
         with open(sys.argv[1]) as openfile:
             # Load json group file
             logging.info("loading JSON group file")
