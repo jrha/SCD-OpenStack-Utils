@@ -200,29 +200,28 @@ def putter(groups):
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
     projectstring = openstack_project_list()
 
-    for i in groups.keys():
-        members = groups[i]["members"]
-        project = i
+    for group in groups.keys():
+        members = groups[group]["members"]
+        project = group
         # Sets a project to a profile is there is a linked project found
-        if "project" in groups[i].keys():
-            project = groups[i]["project"]
-        description = groups[i]["description"]
+        if "project" in groups[group].keys():
+            project = groups[group]["project"]
+        description = groups[group]["description"]
         if project not in projectstring:
             # Run this command if there is no projectstring
             openstack_project_create(description, project, projectstring)
         # Command line to grab JSON file
-        projectmemberc = openstack_user_list(project)
 
         projectmemberlist = []
         # Iterates over projectmember list
-        for j in projectmemberc:
-            logging.debug("adding %s to %s", j, projectmemberlist)
+        for user in openstack_user_list(project):
+            logging.debug("adding %s to %s", user, projectmemberlist)
             # print j
-            projectmemberlist.append(j["Name"])
+            projectmemberlist.append(user["Name"])
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
-                openstack_role_add(member, project, groups, i, projectmemberlist)
+                openstack_role_add(member, project, groups, group, projectmemberlist)
     logging.info("putter function ending")
 def main():
     '''
