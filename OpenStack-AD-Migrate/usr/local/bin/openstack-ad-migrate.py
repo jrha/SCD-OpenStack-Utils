@@ -198,11 +198,11 @@ def putter(groups):
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
     projectstring = openstack_project_list()
 
-    for group in groups.keys():
+    for group in groups:
         members = groups[group]["members"]
         project = group
         # Sets a project to a profile is there is a linked project found
-        if "project" in groups[group].keys():
+        if "project" in groups[group]:
             project = groups[group]["project"]
         description = groups[group]["description"]
         if project not in projectstring:
