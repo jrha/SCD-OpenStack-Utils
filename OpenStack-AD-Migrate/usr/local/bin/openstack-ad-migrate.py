@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 '''
 This is a program
 '''
@@ -14,6 +14,8 @@ import ldap
 import ldap.sasl
 
 
+LDAP_ATTRS = ["cn", "displayName", "member", "descripion"]
+
 
 PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
@@ -26,11 +28,15 @@ if ARGS.debug:
 if not ARGS.debug:
     LOG_LEVEL = logging.INFO
 
-logging.basicConfig(format='%(asctime)s | %(levelname)s : %(message)s',
-level=LOG_LEVEL, datefmt='%d/%m/%Y | %I:%M:%S %p', filename='logging.log')
+logging.basicConfig(
+    format='%(asctime)s | %(levelname)s : %(message)s',
+    level=LOG_LEVEL,
+    datefmt='%d/%m/%Y | %I:%M:%S %p',
+    filename='logging.log',
+)
+
 logging.info("PROGRAM STARTING")
 CONFIGPARSER = SafeConfigParser()
-# logging.basicConfig(, level=logging.info)
 logging.info("Checking config file")
 
 if ARGS.config:
@@ -73,27 +79,34 @@ def cl(command):
 
 
 def openstack_user_list(project):
-    projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
-    # Loads project memebers from a json file
-    logging.info("running command %s for grabbing a JSON file", projectmembercmd)
-    return json.loads(cl(projectmembercmd))
+    '''Get list of users for a project'''
+    return json.loads(cl("openstack user list --project '{0}' -f json --noindent".format(project)))
 
 
 def openstack_project_list():
-    projectc = json.loads(cl("openstack project list -f json --noindent"))
-    projectstring = [c["Name"] for c in projectc]
-    return projectstring
+    '''Get list of projects'''
+    project_list = json.loads(cl("openstack project list -f json --noindent"))
+    return [project["Name"] for project in project_list]
 
 
-def openstack_role_add(member, project, groups, i, projectmemberlist):
-    macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
-    logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
-    cl(macmd)
+def openstack_role_add(username, project, role):
+    '''Add a role (user) to a project'''
+    cmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(
+        username,
+        project,
+        DOMAIN,
+        role,
+    )
+    cl(cmd)
 
 
-def openstack_project_create(description, project, projectstring):
-    projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
-    logging.debug("running command: %s because %s is not in %s", projectcreatecmd, project, projectstring)
+def openstack_project_create(description, project):
+    '''Create a project'''
+    projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(
+        DOMAIN,
+        description,
+        project,
+    )
     cl(projectcreatecmd)
 
 
@@ -132,18 +145,18 @@ def ldapgrabber(groups):
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
     LDAPVAR.protocol_version = ldap.VERSION3
-    # Attempts to bind simple strings to the person.
+
+    # Bind to LDAP server
     try:
         LDAPVAR.simple_bind_s(USER, PWD)
     except ldap.LDAPError, error:
         print error.message['desc']
-    qurl = ["(|"] + ["(cn=%s)" % g for g in groups] + [")"]
-    # Should be returning (|(cn= ))
-    filt = "".join(qurl)
+
+    filt = "(|%s)" % "".join(["(cn=%s)" % g for g in groups])
     # Sets attributes
-    atrs = ["cn", "displayName", "member", "descripion"]
+
     try:
-        results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, atrs)
+        results = LDAPVAR.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, LDAP_ATTRS)
     except ldap.SERVER_DOWN:
         print(error.message['desc'])
         logging.critical(error.message['desc'])
@@ -152,7 +165,6 @@ def ldapgrabber(groups):
     return results
 
 
-    # Sets result to an empty dictionary
 def getter(groups):
     '''
     This section is to sort through the json file it grabs from ldapgrabberself
@@ -160,31 +172,32 @@ def getter(groups):
     logging.info("Getter function starting")
     results = ldapgrabber(groups)
     result_set = {}
+
     for result_data in results:
         # Replaces " " with _20 which is ascii space and sets variables
         name = result_data[1]['displayName'][0]
         member = result_data[1]['member']
         role = groups[name]["role"]
-        # print name
-        # Sets an empty list
-        resultdatalist = {}
-        resultdatalist["members"] = ldap_flatusers(member)
-        resultdatalist["description"] = name
-        # Grabs a role and key from groups
-        resultdatalist["role"] = role
+
+        resultdatalist = {
+            "members" : ldap_flatusers(member),
+            "description" : name,
+            "role" : role,
+        }
+
         # if a project name is specified then use it
         if "project" in groups[name]:
             resultdatalist["project"] = groups[name]["project"]
+
         # If description is in result_data then it
         # Grabs the description from the result_data
         if "description" in result_data:
             resultdatalist["description"] = result_data[1]['description'][0]
+
         # Sets the name of the results to result_set[name]
         result_set[name] = resultdatalist
         logging.debug("info result_set[name] to resultdatalist %s", result_set[name])
-    LDAPVAR.unbind_s()
-    # print result_set
-    # Returns result_set to putter
+
     logging.info("Getter function ending")
     return result_set
 
@@ -196,31 +209,32 @@ def putter(groups):
     '''
     logging.info("putter function starting")
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
-    projectstring = openstack_project_list()
+    project_list = openstack_project_list()
 
-    for group in groups:
-        members = groups[group]["members"]
-        project = group
-        # Sets a project to a profile is there is a linked project found
-        if "project" in groups[group]:
-            project = groups[group]["project"]
-        description = groups[group]["description"]
-        if project not in projectstring:
-            # Run this command if there is no projectstring
-            openstack_project_create(description, project, projectstring)
-        # Command line to grab JSON file
+    for group, group_info in groups.iteritems():
+        ldap_user_list = group_info["members"]
+        role = group_info["role"]
 
-        projectmemberlist = []
-        # Iterates over projectmember list
-        for user in openstack_user_list(project):
-            logging.debug("adding %s to %s", user, projectmemberlist)
-            # print j
-            projectmemberlist.append(user["Name"])
-        # Iterates over member list
-        for member in members:
-            if member not in projectmemberlist:
-                openstack_role_add(member, project, groups, group, projectmemberlist)
+        # Override project name if specified
+        if "project" in group_info:
+            group = group_info["project"]
+
+        description = group_info["description"]
+
+        if group not in project_list:
+            logging.debug("%s is not in %s, adding", group, project_list)
+            openstack_project_create(description, group)
+
+        project_user_list = [user['Name'] for user in openstack_user_list(group)]
+
+        for user in ldap_user_list:
+            if user not in project_user_list:
+                logging.debug("%s is not in %s, adding", user, project_user_list)
+                openstack_role_add(user, group, role)
+
     logging.info("putter function ending")
+
+
 def main():
     '''
     This is the main function that causes the others to be called
@@ -240,6 +254,8 @@ def main():
             logging.debug("running putter(getter(groupdata))")
             putter(getter(groupdata))
     logging.info("PROGRAM ENDING")
+    LDAPVAR.unbind_s()
+
 
 if __name__ == "__main__":
     main()
