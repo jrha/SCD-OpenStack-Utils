@@ -137,7 +137,7 @@ def ldapgrabber(groups):
         LDAPVAR.simple_bind_s(USER, PWD)
     except ldap.LDAPError, error:
         print error.message['desc']
-    qurl = ["(|"] + ["(cn="+g.replace("_20", " ") + ")" for g in groups] + [")"]
+    qurl = ["(|"] + ["(cn=%s)" % g for g in groups] + [")"]
     # Should be returning (|(cn= ))
     filt = "".join(qurl)
     # Sets attributes
@@ -163,9 +163,8 @@ def getter(groups):
     for result_data in results:
         # Replaces " " with _20 which is ascii space and sets variables
         name = result_data[1]['displayName'][0]
-        key = name.replace(" ", "_20")
         member = result_data[1]['member']
-        role = groups[key]["role"]
+        role = groups[name]["role"]
         # print name
         # Sets an empty list
         resultdatalist = {}
@@ -173,10 +172,9 @@ def getter(groups):
         resultdatalist["description"] = name
         # Grabs a role and key from groups
         resultdatalist["role"] = role
-        # if groups[key] is true then it grabs
-        # project from groups[key]['project']
-        if "project" in groups[key]:
-            resultdatalist["project"] = groups[key]["project"]
+        # if a project name is specified then use it
+        if "project" in groups[name]:
+            resultdatalist["project"] = groups[name]["project"]
         # If description is in result_data then it
         # Grabs the description from the result_data
         if "description" in result_data:
@@ -238,6 +236,7 @@ def main():
             # Loads json file into commandline from sysargs
             logging.info("loading JSON file")
             groupdata = json.load(openfile)
+            groupdata = {k.replace("_20", " "):v for k, v in groupdata.iteritems()}
             logging.debug("running putter(getter(groupdata))")
             putter(getter(groupdata))
     logging.info("PROGRAM ENDING")
