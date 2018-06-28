@@ -36,27 +36,7 @@ logging.basicConfig(
 )
 
 logging.info("PROGRAM STARTING")
-CONFIGPARSER = SafeConfigParser()
-logging.info("Checking config file")
 
-if ARGS.config:
-    CONFIGPARSER.read(ARGS.config)
-    logging.debug("commandline config file found")
-if not ARGS.config:
-    CONFIGPARSER.read('./etc/openstack-utils/config.ini')
-    logging.info("non-commandline config file found")
-
-logging.info("attempting to read config file")
-
-try:
-    USER = CONFIGPARSER.get('ad', 'userdn')
-    PWD = CONFIGPARSER.get('ad', 'password')
-    HOST = CONFIGPARSER.get('ad', 'host')
-    BASEDN = CONFIGPARSER.get('ad', 'basedn')
-    DOMAIN = CONFIGPARSER.get('openstack', 'domain')
-except NoSectionError:
-    logging.info("config file not found")
-    # print("No config file")
 
 
 ENV = os.environ.copy()
@@ -82,21 +62,21 @@ def openstack_project_list():
     return [project["Name"] for project in project_list]
 
 
-def openstack_role_add(username, project, role):
+def openstack_role_add(username, project, role, domain):
     '''Add a role (user) to a project'''
     cmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(
         username,
         project,
-        DOMAIN,
+        domain,
         role,
     )
     cl(cmd)
 
 
-def openstack_project_create(description, project):
+def openstack_project_create(description, project, domain):
     '''Create a project'''
     projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(
-        DOMAIN,
+        domain,
         description,
         project,
     )
@@ -113,7 +93,6 @@ def ldap_flatusers(members, ldap_session):
     for i in members:
         # splits msplitvar by ,
         msplitvar = i.split(",")
-        basedn = BASEDN
         basedn = ",".join(msplitvar[1:])
         props = ["cn", "displayName", "member"]
         results = ldap_session.search(basedn, ldap.SCOPE_SUBTREE, msplitvar[0], props)
@@ -130,7 +109,7 @@ def ldap_flatusers(members, ldap_session):
 
 
 # Function for getting groups variable
-def ldapgrabber(groups, ldap_session):
+def ldapgrabber(groups, ldap_session, ldap_basedn):
     '''
     This is the script that gets the information using ldap
     '''
@@ -138,17 +117,11 @@ def ldapgrabber(groups, ldap_session):
     # Uses ldap.open to grab hostlist
     logging.info("opening HOST from config with ldap")
 
-    # Bind to LDAP server
-    try:
-        ldap_session.simple_bind_s(USER, PWD)
-    except ldap.LDAPError, error:
-        print error.message['desc']
-
     filt = "(|%s)" % "".join(["(cn=%s)" % g for g in groups])
     # Sets attributes
 
     try:
-        results = ldap_session.search_st(BASEDN, ldap.SCOPE_SUBTREE, filt, LDAP_ATTRS)
+        results = ldap_session.search_st(ldap_basedn, ldap.SCOPE_SUBTREE, filt, LDAP_ATTRS)
     except ldap.SERVER_DOWN:
         print(error.message['desc'])
         logging.critical(error.message['desc'])
@@ -157,12 +130,12 @@ def ldapgrabber(groups, ldap_session):
     return results
 
 
-def getter(groups, ldap_session):
+def getter(groups, ldap_session, ldap_basedn):
     '''
     This section is to sort through the json file it grabs from ldapgrabberself
     '''
     logging.info("Getter function starting")
-    results = ldapgrabber(groups, ldap_session)
+    results = ldapgrabber(groups, ldap_session, ldap_basedn)
     result_set = {}
 
     for result_data in results:
@@ -194,7 +167,7 @@ def getter(groups, ldap_session):
     return result_set
 
 
-def putter(groups):
+def putter(groups, openstack_domain):
     '''
     This is the function to put the information gathered from getter
     into commands to run and use
@@ -215,14 +188,14 @@ def putter(groups):
 
         if group not in project_list:
             logging.debug("%s is not in %s, adding", group, project_list)
-            openstack_project_create(description, group)
+            openstack_project_create(description, group, openstack_domain)
 
         project_user_list = [user['Name'] for user in openstack_user_list(group)]
 
         for user in ldap_user_list:
             if user not in project_user_list:
                 logging.debug("%s is not in %s, adding", user, project_user_list)
-                openstack_role_add(user, group, role)
+                openstack_role_add(user, group, role, openstack_domain)
 
     logging.info("putter function ending")
 
@@ -231,7 +204,28 @@ def main():
     '''
     This is the main function that causes the others to be called
     '''
-    # Sys exit 1 if not enough args
+
+    configparser = SafeConfigParser()
+    logging.info("Checking config file")
+
+    if ARGS.config:
+        configparser.read(ARGS.config)
+        logging.debug("commandline config file found")
+    if not ARGS.config:
+        configparser.read('./etc/openstack-utils/config.ini')
+        logging.info("non-commandline config file found")
+
+    logging.info("attempting to read config file")
+
+    try:
+        ldap_user = configparser.get('ldap', 'userdn')
+        ldap_pass = configparser.get('ldap', 'password')
+        ldap_host = configparser.get('ldap', 'host')
+        ldap_basedn = configparser.get('ldap', 'basedn')
+        openstack_domain = configparser.get('openstack', 'domain')
+    except NoSectionError:
+        logging.info("config file not found")
+
 
     if not ARGS.input:
         print "Usage: {0} <groups-file>".format(sys.argv[0])
@@ -246,16 +240,21 @@ def main():
 
             # Connect to LDAP server
             try:
-                ldap_session = ldap.open(HOST)
+                ldap_session = ldap.open(ldap_host)
             except NameError, error:
-                print("NameError ldap.open(HOST) failed")
+                print("ldap.open(ldap_host) failed")
                 logging.critical("NameError ldap.open(HOST) failed")
                 sys.exit(1)
-            ldap_session.protocol_version = ldap.VERSION3
+
+            # Bind to LDAP server
+            try:
+                ldap_session.simple_bind_s(ldap_user, ldap_pass)
+            except ldap.LDAPError, error:
+                print error.message['desc']
 
             # The real meat
             logging.debug("running putter(getter(...))")
-            putter(getter(groupdata, ldap_session))
+            putter(getter(groupdata, ldap_session, ldap_basedn), openstack_domain)
 
             # Disconnect from LDAP server
             ldap_session.unbind_s()
