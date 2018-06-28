@@ -152,7 +152,7 @@ def getter(groups):
         resultdatalist["role"] = role
         # if groups[key] is true then it grabs
         # project from groups[key]['project']
-        if "project" in groups[key].keys():
+        if "project" in groups[key]:
             resultdatalist["project"] = groups[key]["project"]
         # If description is in result_data then it
         # Grabs the description from the result_data
@@ -184,7 +184,7 @@ def putter(groups):
         project = i
         # Sets a project to a profile is there is a linked project found
         if "project" in groups[i].keys():
-            project = groups[i]["name"]
+            project = groups[i]["project"]
         description = groups[i]["description"]
         if project not in projectstring:
             # Run this command if there is no projectstring
