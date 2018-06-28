@@ -26,7 +26,7 @@ def main():
             print "Unsupported"
             sys.exit(1)
     elif args.object == 'user':
-        print "[]"
+        print '[{"ID": "abc123", "Name": "gtf87"}]'
     elif args.object == 'role':
         sys.exit(0)
     else:

@@ -18,7 +18,7 @@ import ldap.sasl
 PARSER = argparse.ArgumentParser(description='Process some stuff.')
 PARSER.add_argument('input', type=str, help='This is the json file to use')
 PARSER.add_argument('--config', type=str, help='This is the config file to use')
-PARSER.add_argument('--debug', type=str, help='This is the debug setting for the logger')
+PARSER.add_argument('--debug', action='store_true', help='This is the debug setting for the logger')
 ARGS = PARSER.parse_args()
 
 if ARGS.debug:
@@ -71,6 +71,30 @@ def cl(command):
     logging.info("running command: %s in cl function", command)
     return pcommand.communicate()[0]
 
+
+def openstack_user_list(project):
+    projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
+    # Loads project memebers from a json file
+    logging.info("running command %s for grabbing a JSON file", projectmembercmd)
+    return json.loads(cl(projectmembercmd))
+
+def openstack_project_list():
+    projectc = json.loads(cl("openstack project list -f json --noindent"))
+    projectstring = [c["Name"] for c in projectc]
+    print projectc
+    print projectstring
+    return projectstring
+
+def projectmemberget(member, project, groups, i, projectmemberlist):
+    macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
+    cl(macmd)
+    logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
+
+def openstack_project_create(description, project, projectstring):
+    projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
+    cl(projectcreatecmd)
+    logging.info(projectcreatecmd)
+    logging.debug("running command: %s because %s is not in %s", projectcreatecmd, project, projectstring)
 
 def ldap_flatusers(members):
     '''
@@ -175,10 +199,8 @@ def putter(groups):
     '''
     logging.info("putter function starting")
     logging.info("Loading JSON file from 'openstack project list -f json --noindent'")
-    projectc = json.loads(cl("openstack project list -f json --noindent"))
-    projectstring = [c["Name"] for c in projectc]
-    print projectc
-    print projectstring
+    projectstring = openstack_project_list()
+
     for i in groups.keys():
         members = groups[i]["members"]
         project = i
@@ -188,28 +210,21 @@ def putter(groups):
         description = groups[i]["description"]
         if project not in projectstring:
             # Run this command if there is no projectstring
-            projectcreatecmd = "openstack project create --domain '{0}' --description '{1}' '{2}'".format(DOMAIN, description, project)
-            cl(projectcreatecmd)
-            logging.info(projectcreatecmd)
-            logging.debug("running command: %s because %s is not in %s", projectcreatecmd, project, projectstring)
+            openstack_project_create(description, project, projectstring)
         # Command line to grab JSON file
-        projectmembercmd = "openstack user list --project '{0}' -f json --noindent".format(project)
-        # Loads project memebers from a json file
-        logging.info("running command %s for grabbing a JSON file", projectmembercmd)
-        projectmemberc = json.loads(cl(projectmembercmd))
+        projectmemberc = openstack_user_list(project)
+
         projectmemberlist = []
         # Iterates over projectmember list
-        for i in projectmemberc:
-            logging.debug("adding %s to %s", i, projectmemberlist)
-            # print i
-            projectmemberlist.append(i["Name"])
+        for j in projectmemberc:
+            logging.debug("adding %s to %s", j, projectmemberlist)
+            # print j
+            projectmemberlist.append(j["Name"])
         # Iterates over member list
         for member in members:
             if member not in projectmemberlist:
-                macmd = "openstack role add --user '{0}' --user-domain stfc --project '{1}' --project-domain '{2}' '{3}'".format(member, project, DOMAIN, groups[i]["role"])
-                cl(macmd)
-                logging.debug("Running %s for %s is not in %s", macmd, member, projectmemberlist)
-    logging.info("putter function starting")
+                projectmemberget(member, project, groups, i, projectmemberlist)
+    logging.info("putter function ending")
 def main():
     '''
     This is the main function that causes the others to be called
